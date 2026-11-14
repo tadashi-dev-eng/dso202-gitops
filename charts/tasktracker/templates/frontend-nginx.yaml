@@ -1,0 +1,50 @@
+{{- /*
+=============================================================================
+File        : charts/tasktracker/templates/frontend-nginx.yaml
+Assignment  : DSO202 Assignment 4
+Descriptor  : Unit I 1.2.5 - ConfigMaps mounted as files
+Purpose     : nginx configuration for the frontend Pod. Identical to the one
+              baked into the tutor image, plus one 'location /api/' block
+              that proxies API calls to the backend Service. Without it the
+              browser would have to resolve the in-cluster backend name
+              itself (the Assignment 1 /etc/hosts workaround). No Ingress is
+              installed in this assignment (C9), so this is how the single
+              NodePort serves both the page and the API.
+=============================================================================
+*/}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "tasktracker.nginxName" . }}
+  labels:
+    {{- include "tasktracker.labels" (dict "ctx" . "component" "frontend") | nindent 4 }}
+data:
+  nginx.conf: |
+    worker_processes auto;
+    pid /tmp/nginx.pid;
+    events { worker_connections 1024; }
+    http {
+      include       /etc/nginx/mime.types;
+      default_type  application/octet-stream;
+      client_body_temp_path /tmp/client_temp;
+      proxy_temp_path       /tmp/proxy_temp;
+      fastcgi_temp_path     /tmp/fastcgi_temp;
+      uwsgi_temp_path       /tmp/uwsgi_temp;
+      scgi_temp_path        /tmp/scgi_temp;
+      sendfile on;
+      keepalive_timeout 65;
+      server {
+        listen 8080;
+        server_name _;
+        root /usr/share/nginx/html;
+        index index.html;
+        location = /config.js { add_header Cache-Control "no-store"; }
+        # Same-origin API: the backend Service name is resolved inside the
+        # cluster by nginx, never by the browser.
+        location /api/ {
+          proxy_pass http://{{ include "tasktracker.backendName" . }}:8080;
+          proxy_set_header Host $host;
+        }
+        location / { try_files $uri $uri/ /index.html; }
+      }
+    }

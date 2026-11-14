@@ -1,0 +1,75 @@
+# =============================================================================
+# File        : charts/tasktracker/values.yaml
+# Assignment  : DSO202 Assignment 4
+# Descriptor  : Unit III 3.2 - Helm values; chart contract C1-C10 (Task 1)
+# Purpose     : Chart DEFAULTS only. Everything that differs between dev and
+#               staging lives in environments/<env>/values.yaml (design rule 2).
+# =============================================================================
+
+# Environment name, rendered into the dso202/environment label. Required.
+environment: ""
+
+# C1: each tier has its own image repository and tag. No tag is written in a
+# template, so a release is a values change only (Task 7).
+frontend:
+  image:
+    repository: sarojsanyasi/dso202-frontend
+    tag: "1.0"
+    pullPolicy: IfNotPresent
+  replicaCount: 1
+  # C6: report a stuck rollout as Degraded after 2 minutes, not 10.
+  progressDeadlineSeconds: 120
+  # C10: the frontend is published through a NodePort whose number is a value.
+  service:
+    type: NodePort
+    port: 8080
+    nodePort: 30080
+  # C2: extra environment variables, rendered as name/value pairs.
+  env: {}
+  # C7: requests and limits on every container (namespace quota requires them).
+  resources:
+    requests: {cpu: 50m, memory: 64Mi}
+    limits: {cpu: 200m, memory: 128Mi}
+
+backend:
+  image:
+    repository: sarojsanyasi/dso202-backend
+    tag: "1.0"
+    pullPolicy: IfNotPresent
+  replicaCount: 1
+  progressDeadlineSeconds: 120
+  # CORS origin. The browser reaches the API through the frontend's own origin
+  # (nginx proxies /api), so '*' is never actually exercised cross-origin.
+  corsOrigin: "*"
+  logLevel: info
+  # C2: adding a backend environment variable is a values change only.
+  # Example (Task 7 fix-forward): env: {SOME_VAR: "value"}
+  env: {}
+  resources:
+    requests: {cpu: 100m, memory: 128Mi}
+    limits: {cpu: 500m, memory: 256Mi}
+
+database:
+  image:
+    repository: sarojsanyasi/dso202-db
+    tag: "1.0"
+    pullPolicy: IfNotPresent
+  name: taskdb
+  env: {}
+  storage:
+    size: 1Gi
+    className: standard
+  resources:
+    requests: {cpu: 250m, memory: 256Mi}
+    limits: {cpu: "1", memory: 512Mi}
+
+# C3: the chart never renders a Secret. Pods read DB_USER, DB_PASSWORD,
+# POSTGRES_USER and POSTGRES_PASSWORD from this existing Secret, which the
+# Sealed Secrets controller creates from platform/<env>/*.sealed.yaml.
+existingSecret: tasktracker-credentials
+
+# Extra annotations added to every Pod.
+podAnnotations: {}
+
+nameOverride: ""
+fullnameOverride: ""

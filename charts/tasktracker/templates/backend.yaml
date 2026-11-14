@@ -1,0 +1,85 @@
+{{- /*
+=============================================================================
+File        : charts/tasktracker/templates/backend.yaml
+Assignment  : DSO202 Assignment 4 (from Assignment 3)
+Descriptor  : Unit I 1.3 - Deployments; Unit IV 4.3.2 - sync waves
+Purpose     : Backend API: ClusterIP Service + Deployment.
+Contract    : C1 image from values, C2 extra env from values, C3 credentials
+              from existingSecret, C4 readiness GET /api/status, C5 sync wave
+              "1", C6 progressDeadlineSeconds, C7 resources.
+=============================================================================
+*/}}
+{{- $name := include "tasktracker.backendName" . }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "tasktracker.labels" (dict "ctx" . "component" "backend") | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  type: ClusterIP
+  selector:
+    {{- include "tasktracker.selectorLabels" (dict "ctx" . "component" "backend") | nindent 4 }}
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "tasktracker.labels" (dict "ctx" . "component" "backend") | nindent 4 }}
+  annotations:
+    # C5: wave 1 - created only after the database (wave 0) is Healthy.
+    argocd.argoproj.io/sync-wave: "1"
+spec:
+  replicas: {{ .Values.backend.replicaCount }}
+  # C6: a rollout that makes no progress for 120 s is reported as failed,
+  # which Argo CD shows as Degraded (Task 7).
+  progressDeadlineSeconds: {{ .Values.backend.progressDeadlineSeconds }}
+  selector:
+    matchLabels:
+      {{- include "tasktracker.selectorLabels" (dict "ctx" . "component" "backend") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "tasktracker.selectorLabels" (dict "ctx" . "component" "backend") | nindent 8 }}
+        dso202/environment: {{ include "tasktracker.environment" . | quote }}
+      annotations:
+        # Hash of the rendered ConfigMap: a config change rolls the Pods.
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ include "tasktracker.fullname" . }}-backend
+      automountServiceAccountToken: false
+      containers:
+        - name: backend
+          image: {{ include "tasktracker.image" .Values.backend.image | quote }}
+          imagePullPolicy: {{ .Values.backend.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8080
+          envFrom:
+            - configMapRef:
+                name: {{ include "tasktracker.configName" . }}
+          env:
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef: {name: {{ include "tasktracker.secretName" . }}, key: DB_USER}
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef: {name: {{ include "tasktracker.secretName" . }}, key: DB_PASSWORD}
+            # C2: per-environment extra variables (values only, no template change).
+            {{- include "tasktracker.env" .Values.backend.env | nindent 12 }}
+          # C4: ready only when the API answers and the database is reachable.
+          readinessProbe:
+            httpGet: {path: /api/status, port: http}
+            periodSeconds: 5
+          resources:
+            {{- toYaml .Values.backend.resources | nindent 12 }}

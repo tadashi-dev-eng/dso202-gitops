@@ -1,0 +1,30 @@
+{{- /*
+=============================================================================
+File        : charts/tasktracker/templates/configmap.yaml
+Assignment  : DSO202 Assignment 4 (from Assignment 3)
+Descriptor  : Unit I 1.2.5 - ConfigMaps
+Purpose     : Non-sensitive settings for the backend and database. Its hash is
+              a Pod annotation (checksum/config), so editing it rolls Pods.
+              Credentials are NOT here: they come from existingSecret (C3).
+=============================================================================
+*/}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "tasktracker.configName" . }}
+  labels:
+    {{- include "tasktracker.labels" (dict "ctx" . "component" "config") | nindent 4 }}
+data:
+  # StatefulSet Pod 0 behind the headless Service: <sts>-0.<service>
+  DB_HOST: {{ printf "%s-0.%s" (include "tasktracker.dbName" .) (include "tasktracker.dbName" .) | quote }}
+  DB_PORT: "5432"
+  DB_NAME: {{ .Values.database.name | quote }}
+  POSTGRES_DB: {{ .Values.database.name | quote }}
+  APP_PORT: "8080"
+  CORS_ORIGIN: {{ .Values.backend.corsOrigin | quote }}
+  LOG_LEVEL: {{ .Values.backend.logLevel | quote }}
+  # The browser calls the API on the frontend's own origin ("./api/..."); the
+  # frontend nginx proxies /api to the backend Service (frontend-nginx.yaml).
+  # "." and not "" because the image's entrypoint replaces an empty value
+  # with http://localhost:8080.
+  BACKEND_URL: "."

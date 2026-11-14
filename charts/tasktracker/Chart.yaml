@@ -1,0 +1,21 @@
+# =============================================================================
+# File        : charts/tasktracker/Chart.yaml
+# Assignment  : DSO202 Assignment 4 (chart carried over from Assignment 3)
+# Descriptor  : Unit III 3.2 - Helm charts; Unit IV 4.3 - delivered by Argo CD
+# Purpose     : Identity of the Task Tracker chart. Renamed from 'task-tracker'
+#               to 'tasktracker' so that, with the fixed release name
+#               'tasktracker' used by both Applications, objects are named
+#               tasktracker-db / tasktracker-backend / tasktracker-frontend.
+# =============================================================================
+apiVersion: v2
+name: tasktracker                 # must match the directory name
+description: DSO202 three-tier Task Tracker (frontend, backend API, PostgreSQL StatefulSet), delivered by Argo CD
+type: application
+# 1.0.0: GitOps contract C1-C11 (per-tier image values, existingSecret only,
+# sync-wave annotations, progressDeadlineSeconds, NodePort frontend, no
+# platform-layer kinds, PostSync smoke test).
+version: 1.0.0                    # version of the CHART
+appVersion: "1.0"                 # baseline image tag of the application
+kubeVersion: ">=1.30.0-0"
+maintainers:
+  - name: tadashi-dev-eng

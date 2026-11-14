@@ -1,0 +1,10 @@
+# =============================================================================
+# File        : charts/tasktracker/.helmignore
+# Assignment  : DSO202 Assignment 4
+# Purpose     : Files left out of the packaged chart (helm package).
+# =============================================================================
+.git/
+*.swp
+*.bak
+*.tmp
+.DS_Store

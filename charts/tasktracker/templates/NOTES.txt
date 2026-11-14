@@ -1,0 +1,3 @@
+Task Tracker release {{ .Release.Name }} in namespace {{ .Release.Namespace }} (environment {{ include "tasktracker.environment" . }}).
+Images: frontend {{ include "tasktracker.image" .Values.frontend.image }}, backend {{ include "tasktracker.image" .Values.backend.image }}, database {{ include "tasktracker.image" .Values.database.image }}
+Frontend NodePort: {{ .Values.frontend.service.nodePort }}  (dev: http://localhost:30080; staging: kubectl port-forward)

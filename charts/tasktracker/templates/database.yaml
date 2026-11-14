@@ -1,0 +1,103 @@
+{{- /*
+=============================================================================
+File        : charts/tasktracker/templates/database.yaml
+Assignment  : DSO202 Assignment 4 (from Assignment 2/3)
+Descriptor  : Unit II 2.1 - StatefulSets; Unit IV 4.3.2 - sync waves
+Purpose     : Headless Service + PostgreSQL StatefulSet (stable Pod name
+              tasktracker-db-0, one PVC per replica).
+Contract    : C1 image from values, C3 credentials from existingSecret,
+              C4 readiness probe (pg_isready), C5 sync wave "0", C7 resources.
+=============================================================================
+*/}}
+{{- $db := include "tasktracker.dbName" . }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $db }}
+  labels:
+    {{- include "tasktracker.labels" (dict "ctx" . "component" "database") | nindent 4 }}
+  annotations:
+    # C5: the database tier is wave 0 - it must be Healthy before the backend.
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  clusterIP: None
+  selector:
+    {{- include "tasktracker.selectorLabels" (dict "ctx" . "component" "database") | nindent 4 }}
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: postgres
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ $db }}
+  labels:
+    {{- include "tasktracker.labels" (dict "ctx" . "component" "database") | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "0"
+spec:
+  serviceName: {{ $db }}
+  replicas: 1
+  podManagementPolicy: OrderedReady
+  selector:
+    matchLabels:
+      {{- include "tasktracker.selectorLabels" (dict "ctx" . "component" "database") | nindent 6 }}
+  # RollingUpdate, not OnDelete: Argo CD does not report an OnDelete
+  # StatefulSet as Healthy (brief section 13).
+  updateStrategy:
+    type: RollingUpdate
+  # PVCs created from volumeClaimTemplates are not tracked by Argo CD and
+  # survive deletion of the Application (Task 5 failure modes).
+  persistentVolumeClaimRetentionPolicy:
+    whenDeleted: Retain
+    whenScaled: Retain
+  template:
+    metadata:
+      labels:
+        {{- include "tasktracker.selectorLabels" (dict "ctx" . "component" "database") | nindent 8 }}
+        dso202/environment: {{ include "tasktracker.environment" . | quote }}
+      {{- with .Values.podAnnotations }}
+      annotations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    spec:
+      serviceAccountName: {{ include "tasktracker.fullname" . }}-db
+      automountServiceAccountToken: false
+      containers:
+        - name: postgres
+          image: {{ include "tasktracker.image" .Values.database.image | quote }}
+          imagePullPolicy: {{ .Values.database.image.pullPolicy }}
+          ports:
+            - name: postgres
+              containerPort: 5432
+          env:
+            - name: POSTGRES_DB
+              valueFrom:
+                configMapKeyRef: {name: {{ include "tasktracker.configName" . }}, key: POSTGRES_DB}
+            - name: POSTGRES_USER
+              valueFrom:
+                secretKeyRef: {name: {{ include "tasktracker.secretName" . }}, key: POSTGRES_USER}
+            - name: POSTGRES_PASSWORD
+              valueFrom:
+                secretKeyRef: {name: {{ include "tasktracker.secretName" . }}, key: POSTGRES_PASSWORD}
+            {{- include "tasktracker.env" .Values.database.env | nindent 12 }}
+          # C4: ready only when PostgreSQL accepts connections.
+          readinessProbe:
+            exec:
+              command: ["sh", "-c", "pg_isready -U \"$POSTGRES_USER\" -d \"$POSTGRES_DB\""]
+            periodSeconds: 5
+          resources:
+            {{- toYaml .Values.database.resources | nindent 12 }}
+          volumeMounts:
+            - name: data
+              mountPath: /var/lib/postgresql/data
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: {{ .Values.database.storage.className }}
+        resources:
+          requests:
+            storage: {{ .Values.database.storage.size }}

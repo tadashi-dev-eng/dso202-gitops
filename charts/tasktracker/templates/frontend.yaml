@@ -1,0 +1,88 @@
+{{- /*
+=============================================================================
+File        : charts/tasktracker/templates/frontend.yaml
+Assignment  : DSO202 Assignment 4 (from Assignment 3)
+Descriptor  : Unit I 1.3/1.4 - Deployments and Services; Unit IV 4.3.2
+Purpose     : Frontend: NodePort Service + Deployment.
+Contract    : C1 image from values, C2 extra env from values, C4 readiness,
+              C5 sync wave "2", C6 progressDeadlineSeconds, C7 resources,
+              C10 NodePort number from values (30080 dev, 30081 staging).
+=============================================================================
+*/}}
+{{- $name := include "tasktracker.frontendName" . }}
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "tasktracker.labels" (dict "ctx" . "component" "frontend") | nindent 4 }}
+  annotations:
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  type: {{ .Values.frontend.service.type }}
+  selector:
+    {{- include "tasktracker.selectorLabels" (dict "ctx" . "component" "frontend") | nindent 4 }}
+  ports:
+    - name: http
+      port: {{ .Values.frontend.service.port }}
+      targetPort: http
+      {{- if eq .Values.frontend.service.type "NodePort" }}
+      nodePort: {{ required "frontend.service.nodePort is required for a NodePort Service" .Values.frontend.service.nodePort }}
+      {{- end }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ $name }}
+  labels:
+    {{- include "tasktracker.labels" (dict "ctx" . "component" "frontend") | nindent 4 }}
+  annotations:
+    # C5: wave 2 - created only after the backend (wave 1) is Healthy.
+    argocd.argoproj.io/sync-wave: "2"
+spec:
+  replicas: {{ .Values.frontend.replicaCount }}
+  progressDeadlineSeconds: {{ .Values.frontend.progressDeadlineSeconds }}
+  selector:
+    matchLabels:
+      {{- include "tasktracker.selectorLabels" (dict "ctx" . "component" "frontend") | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "tasktracker.selectorLabels" (dict "ctx" . "component" "frontend") | nindent 8 }}
+        dso202/environment: {{ include "tasktracker.environment" . | quote }}
+      annotations:
+        checksum/config: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        checksum/nginx: {{ include (print $.Template.BasePath "/frontend-nginx.yaml") . | sha256sum }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+    spec:
+      serviceAccountName: {{ include "tasktracker.fullname" . }}-frontend
+      automountServiceAccountToken: false
+      containers:
+        - name: frontend
+          image: {{ include "tasktracker.image" .Values.frontend.image | quote }}
+          imagePullPolicy: {{ .Values.frontend.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: BACKEND_URL
+              valueFrom:
+                configMapKeyRef: {name: {{ include "tasktracker.configName" . }}, key: BACKEND_URL}
+            {{- include "tasktracker.env" .Values.frontend.env | nindent 12 }}
+          readinessProbe:
+            httpGet: {path: /, port: http}
+            periodSeconds: 5
+          resources:
+            {{- toYaml .Values.frontend.resources | nindent 12 }}
+          volumeMounts:
+            # Replace only nginx.conf; the rest of /etc/nginx stays from the image.
+            - name: nginx-conf
+              mountPath: /etc/nginx/nginx.conf
+              subPath: nginx.conf
+              readOnly: true
+      volumes:
+        - name: nginx-conf
+          configMap:
+            name: {{ include "tasktracker.nginxName" . }}
