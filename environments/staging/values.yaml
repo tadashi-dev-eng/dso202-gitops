@@ -1,0 +1,29 @@
+# =============================================================================
+# File        : environments/staging/values.yaml
+# Assignment  : DSO202 Assignment 4
+# Descriptor  : Unit III 3.2 - Helm values per environment; Unit IV 4.3.1
+# Purpose     : Everything that differs in the staging environment, and nothing
+#               else (design rule 2). Read by argocd/applications/tasktracker-staging.yaml
+#               as ../../environments/staging/values.yaml (relative to the chart).
+# =============================================================================
+environment: staging
+
+frontend:
+  image:
+    tag: "1.0"            # baseline (section 8); a release changes only this line
+  replicaCount: 1         # one replica per tier to conserve memory (Task 1 step 5)
+  service:
+    nodePort: 30081         # NOT mapped by kind; reached with kubectl port-forward
+
+backend:
+  image:
+    tag: "1.0"
+  replicaCount: 1
+
+database:
+  image:
+    tag: "1.0"
+
+# C3: Secret created by the Sealed Secrets controller from
+# platform/staging/tasktracker-credentials.sealed.yaml
+existingSecret: tasktracker-credentials
