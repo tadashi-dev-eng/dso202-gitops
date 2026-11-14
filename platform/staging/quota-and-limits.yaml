@@ -1,0 +1,46 @@
+# =============================================================================
+# File        : platform/staging/quota-and-limits.yaml
+# Assignment  : DSO202 Assignment 4 (from Assignment 2, 03-quota.yaml)
+# Descriptor  : Unit I 1.5.3 - ResourceQuota and LimitRange
+# Purpose     : Namespace governance for dso202-staging, delivered by the
+#               platform-staging Application (platform project), so the workload
+#               project (dso202) can never loosen its own limits.
+# Changes from Assignment 2:
+#   - services.nodeports 0 -> 1   : A4 has no Ingress; the frontend is a NodePort (C10)
+#   - pods 8 -> 10                : headroom for rolling updates + the smoke-test Job
+#   - LimitRange min cpu 25m->10m, memory 32Mi->16Mi : the smoke-test Job
+#     (Listing 13) requests 10m / 16Mi and would otherwise be rejected
+# =============================================================================
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: ns-quota
+  namespace: dso202-staging
+spec:
+  hard:
+    requests.cpu: "1"
+    requests.memory: 1Gi
+    limits.cpu: "3"
+    limits.memory: 2Gi
+    pods: "10"
+    services: "4"
+    services.nodeports: "1"
+    services.loadbalancers: "0"
+    persistentvolumeclaims: "2"
+    requests.storage: 2Gi
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: ns-limits
+  namespace: dso202-staging
+spec:
+  limits:
+    - type: Container
+      defaultRequest: {cpu: 100m, memory: 128Mi}
+      default: {cpu: 250m, memory: 256Mi}
+      min: {cpu: 10m, memory: 16Mi}
+      max: {cpu: "1", memory: 1Gi}
+    - type: PersistentVolumeClaim
+      min: {storage: 500Mi}
+      max: {storage: 2Gi}
