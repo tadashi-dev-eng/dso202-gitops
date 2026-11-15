@@ -17,8 +17,14 @@ frontend:
 
 backend:
   image:
-    tag: "1.0"
+    tag: "1.1"            # Task 7 fix-forward: release 1.1 again, with APP_ENV supplied
   replicaCount: 1
+  # Backend 1.1 refuses to start without APP_ENV (container log:
+  # "[config] FATAL: required environment variable APP_ENV is not set;
+  # expected one of: dev, staging, prod"). Supplied as a value (C2), so no
+  # template changes.
+  env:
+    APP_ENV: dev
 
 database:
   image:
