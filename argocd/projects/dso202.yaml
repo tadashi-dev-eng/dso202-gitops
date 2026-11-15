@@ -49,3 +49,14 @@ spec:
       kind: ServiceAccount
     - group: batch
       kind: Job
+    # Added in Task 6: not rendered by the chart, but created by the
+    # controllers of the kinds above (Deployment -> ReplicaSet -> Pod,
+    # StatefulSet/Job -> Pod). Argo CD drops non-permitted kinds from an
+    # Application's resource tree, so without these two entries no Pod is
+    # visible and 'logs, get' has nothing to show, in the UI or in
+    # 'argocd app logs'. Both are namespaced and confined to dso202-dev and
+    # dso202-staging; no cluster-scoped or platform kind is added.
+    - group: apps
+      kind: ReplicaSet
+    - group: ""
+      kind: Pod
