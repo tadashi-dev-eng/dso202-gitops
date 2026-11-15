@@ -1,0 +1,52 @@
+# =============================================================================
+# File        : argocd/applications/platform-staging.yaml
+# Assignment  : DSO202 Assignment 4
+# Descriptor  : Unit IV 4.3.1 - Application CRDs; 4.3.2 - sync policies
+# Purpose     : Delivers the platform objects of the staging environment: the
+#               namespace, ResourceQuota, LimitRange, Role and RoleBinding from
+#               Assignment 2, and the staging sealed credentials (sealed
+#               separately from dev, because of strict scope).
+# Derived     : from argocd/applications/platform-dev.yaml (Listing 10); only
+#               the name, label, path (platform/staging) and destination
+#               namespace (dso202-staging) differ. The platform layer follows
+#               main in both environments: only the workloads are gated by a tag.
+# =============================================================================
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: platform-staging
+  namespace: argocd
+  labels:
+    dso202/environment: staging
+  annotations:
+    # Wave -1: after the Sealed Secrets controller (wave -2), before the
+    # workloads (wave 0).
+    argocd.argoproj.io/sync-wave: "-1"
+  finalizers:
+    - resources-finalizer.argocd.argoproj.io
+spec:
+  project: platform
+
+  source:
+    repoURL: https://github.com/tadashi-dev-eng/dso202-gitops.git
+    targetRevision: main
+    # A plain directory of manifests: no chart, no templating.
+    path: platform/staging
+
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: dso202-staging
+
+  syncPolicy:
+    automated:
+      prune: true
+      selfHeal: true
+    syncOptions:
+      # SealedSecret is a CRD from the previous wave; see platform-dev.yaml.
+      - SkipDryRunOnMissingResource=true
+    retry:
+      limit: 5
+      backoff:
+        duration: 10s
+        factor: 2
+        maxDuration: 3m
