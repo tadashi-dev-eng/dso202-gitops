@@ -5,6 +5,7 @@
 #               4.3.3 (health checks); Unit III 3.2 (Helm)
 # Purpose     : Deploys the Task Tracker Helm chart to the dev environment.
 #               Dev follows the tip of main and heals itself automatically.
+# Task 10     : converted to a multi-source Application (chart + $values).
 # =============================================================================
 apiVersion: argoproj.io/v1alpha1
 kind: Application
@@ -22,19 +23,28 @@ metadata:
 spec:
   project: dso202
 
-  source:
-    repoURL: https://github.com/tadashi-dev-eng/dso202-gitops.git
-    # Dev tracks a moving reference: every merge to main is deployed.
-    targetRevision: main
-    path: charts/tasktracker
-    helm:
-      # Fixed release name, so that object names are identical in every
-      # environment; the namespace is what distinguishes them.
-      releaseName: tasktracker
-      # Paths are relative to the chart directory (charts/tasktracker), so two
-      # levels up reaches the repository root.
-      valueFiles:
-        - ../../environments/dev/values.yaml
+  # Task 10 (bonus): two sources instead of one. 'sources' replaces
+  # 'source'; the two keys cannot appear together.
+  sources:
+    # Source 1: the chart. Dev tracks a moving reference: every merge to main
+    # is deployed.
+    - repoURL: https://github.com/tadashi-dev-eng/dso202-gitops.git
+      targetRevision: main
+      path: charts/tasktracker
+      helm:
+        # Fixed release name, so that object names are identical in every
+        # environment; the namespace is what distinguishes them.
+        releaseName: tasktracker
+        # $values resolves to the root of the source with 'ref: values', so
+        # the path is now relative to the repository root, not to the chart.
+        valueFiles:
+          - $values/environments/dev/values.yaml
+    # Source 2: values only. No path; it exists only to be referenced as
+    # $values. Here both sources read main, but either could be pinned
+    # independently (for example the chart to a tag, values to a branch).
+    - repoURL: https://github.com/tadashi-dev-eng/dso202-gitops.git
+      targetRevision: main
+      ref: values
 
   destination:
     server: https://kubernetes.default.svc
